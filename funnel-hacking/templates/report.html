@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funnel report: __FUNNEL_TITLE__</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3ef;
+  --surface-1: #fcfcfb;
+  --surface-2: #ecebe6;
+  --line: #d9d7d0;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #7a7973;
+  --taken: #2a78d6;
+  --taken-soft: #dbe8f8;
+  --branch: #9a988f;
+  --observed: #1b7f5a;
+  --estimated: #a86400;
+  --benchmark: #6250d6;
+  --gate: #c23b3a;
+  --end: #0b0b0b;
+  --radius: 10px;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: "Inter", ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Iowan Old Style", "Charter", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #242422; --line: #3a3a37;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+    --taken: #3987e5; --taken-soft: #1f3550; --branch: #77766f;
+    --observed: #3fbf8a; --estimated: #e0a030; --benchmark: #9085e9; --gate: #e66767; --end: #f0efec;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #242422; --line: #3a3a37;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+  --taken: #3987e5; --taken-soft: #1f3550; --branch: #77766f;
+  --observed: #3fbf8a; --estimated: #e0a030; --benchmark: #9085e9; --gate: #e66767; --end: #f0efec;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); color: var(--text-primary); font: 14px/1.5 var(--sans); }
+header.top { padding: 28px 32px 8px; display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.eyebrow { font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
+h1 { font: 600 30px/1.15 var(--serif); margin: 8px 0 4px; max-width: 900px; }
+.sub { color: var(--text-secondary); }
+.draft { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 99px; background: var(--estimated); color: #fff; font: 600 11px var(--mono); }
+.controls { display: flex; gap: 8px; align-items: center; }
+button.chip, .chip { border: 1px solid var(--line); background: var(--surface-1); color: var(--text-primary); border-radius: 99px; padding: 6px 12px; font: 500 12px var(--sans); cursor: pointer; }
+button.chip[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); margin: 16px 32px; overflow: hidden; }
+.tile { background: var(--surface-1); padding: 14px 16px; }
+.tile .k { font: 600 10.5px/1.2 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.tile .v { font: 600 22px/1.25 var(--serif); margin-top: 6px; }
+.tile .v.small { font: 500 14px/1.4 var(--sans); }
+.kind { display: inline-flex; align-items: center; gap: 4px; font: 600 10px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 3px 6px; border-radius: 4px; border: 1px solid currentColor; vertical-align: middle; }
+.kind.observed { color: var(--observed); } .kind.estimated { color: var(--estimated); } .kind.benchmark { color: var(--benchmark); }
+.kind.observed::before { content: "\25CF"; } .kind.estimated::before { content: "\2248"; } .kind.benchmark::before { content: "\25C6"; }
+
+.panels { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 0 32px 16px; }
+.panel { background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+.panel h2 { font: 600 15px var(--sans); margin: 0 0 10px; }
+.panel ul { margin: 0; padding-left: 18px; } .panel li { margin: 4px 0; }
+.ladder { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.rung { border-left: 3px solid var(--taken); padding: 2px 8px; }
+.rung .p { font: 600 18px var(--serif); } .rung .n { font-size: 12px; color: var(--text-secondary); }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; margin: 0 32px 32px; align-items: start; }
+.graph-wrap { background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; position: relative; min-height: 400px; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-secondary); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 22px; height: 0; border-top: 3px solid var(--taken); display: inline-block; }
+.sw.br { border-top: 2px dashed var(--branch); }
+svg text { font-family: var(--sans); }
+.node { cursor: pointer; }
+.node rect.card { fill: var(--surface-1); stroke: var(--line); stroke-width: 1.5; }
+.node.taken rect.card { stroke: var(--taken); stroke-width: 2.5; }
+.node.selected rect.card { fill: var(--taken-soft); }
+.node:hover rect.card, .node:focus rect.card { stroke-width: 3; }
+.node:focus { outline: none; }
+.node .t { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; fill: var(--text-muted); }
+.node .h { font: 600 13px var(--sans); fill: var(--text-primary); }
+.node .s { font: 400 11.5px var(--sans); fill: var(--text-secondary); }
+.node .ov { font: 500 11px var(--sans); fill: var(--text-secondary); font-style: italic; }
+.badge rect { stroke: none; } .badge text { font: 600 9.5px var(--mono); fill: #fff; letter-spacing: .04em; }
+.edge { fill: none; stroke: var(--branch); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.edge.taken { stroke: var(--taken); stroke-width: 2.5; stroke-dasharray: none; }
+.elabel { font: 500 10.5px var(--sans); fill: var(--text-secondary); }
+.elabel-bg { fill: var(--surface-1); }
+.hide-overlay .ov, .hide-overlay .numchip { display: none; }
+.numchip rect { fill: var(--surface-2); } .numchip text { font: 600 10.5px var(--mono); fill: var(--text-primary); }
+
+aside.detail { background: var(--surface-1); border: 1px solid var(--line); border-radius: var(--radius); position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+.detail .hd { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.detail .hd h3 { margin: 6px 0 2px; font: 600 18px/1.3 var(--serif); }
+.detail section { padding: 12px 18px; border-bottom: 1px solid var(--line); }
+.detail h4 { margin: 0 0 6px; font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+.detail a { color: var(--taken); word-break: break-all; }
+.detail .shot { border: 1px solid var(--line); border-radius: 6px; max-height: 520px; overflow: auto; background: var(--surface-2); }
+.detail .shot img { width: 100%; display: block; }
+.detail .shots { display: grid; grid-template-columns: 2fr 1fr; gap: 8px; }
+.detail pre { white-space: pre-wrap; font: 12px/1.5 var(--mono); background: var(--surface-2); padding: 10px; border-radius: 6px; max-height: 260px; overflow: auto; margin: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th { text-align: left; font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border-bottom: 1px solid var(--line); padding: 6px 8px; }
+td { border-bottom: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }
+.empty { color: var(--text-muted); font-style: italic; }
+.wide { margin: 0 32px 24px; }
+.gate-pill { color: var(--gate); font-weight: 600; }
+.gate-pill::before { content: "\26A0  "; }
+footer { margin: 0 32px 40px; color: var(--text-muted); font-size: 12px; }
+@media (max-width: 1100px) { main, .panels { grid-template-columns: 1fr; } aside.detail { position: static; max-height: none; } }
+</style>
+</head>
+<body>
+<script type="application/json" id="funnel-data">__FUNNEL_DATA__</script>
+
+<header class="top">
+  <div>
+    <div class="eyebrow">Funnel hacking report <span id="run-id"></span></div>
+    <h1 id="title"></h1>
+    <div class="sub" id="subtitle"></div>
+  </div>
+  <div class="controls">
+    <button class="chip" id="t-overlay" aria-pressed="true">Analysis overlay</button>
+    <button class="chip" id="t-branches" aria-pressed="true">Branches</button>
+    <button class="chip" id="t-theme" aria-pressed="false">Dark</button>
+  </div>
+</header>
+
+<div class="summary" id="summary"></div>
+
+<div class="panels">
+  <div class="panel"><h2>Key tactics</h2><div id="tactics"></div></div>
+  <div class="panel"><h2>What to steal</h2><div id="steal"></div></div>
+  <div class="panel"><h2>Price ladder</h2><div id="ladder"></div></div>
+  <div class="panel"><h2>Gaps and unknowns</h2><div id="gaps"></div></div>
+</div>
+
+<main>
+  <div class="graph-wrap" id="graph-wrap">
+    <div class="legend">
+      <span><i class="sw"></i>Path taken</span>
+      <span><i class="sw br"></i>Explored branch</span>
+      <span class="gate-pill">Gate (agent stopped)</span>
+      <span><span class="kind observed">observed</span></span>
+      <span><span class="kind estimated">estimated</span></span>
+      <span><span class="kind benchmark">benchmark</span></span>
+    </div>
+    <svg id="graph" role="img" aria-label="Funnel graph, top to bottom"></svg>
+  </div>
+  <aside class="detail" id="detail" aria-live="polite"></aside>
+</main>
+
+<div class="wide panel"><h2>All numbers</h2><p class="sub">Observed figures were captured in this run. Estimated and benchmark figures are not this funnel's real data; each lists its source and method. Real CTR and conversion rates are not observable from outside.</p><div id="metrics"></div></div>
+<div class="wide panel"><h2>Timeline</h2><div id="timeline"></div></div>
+<footer id="foot"></footer>
+
+<script>
+const D = JSON.parse(document.getElementById('funnel-data').textContent);
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const human = s => { if (s == null) return '-'; s = Math.round(s); const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60), x = s%60;
+  return [d&&d+'d', h&&h+'h', m&&m+'m', (x||!(d||h||m))&&x+'s'].filter(Boolean).join(' '); };
+const kind = k => `<span class="kind ${esc(k)}">${esc(k)}</span>`;
+const nodes = D.nodes, byId = Object.fromEntries(nodes.map(n => [n.id, n]));
+const S = D.summary || {};
+const M = D._metrics || [];
+const taken = nodes.filter(n => n.path === 'taken').sort((a, b) => a.captured_at.localeCompare(b.captured_at));
+
+// header
+$('#run-id').textContent = '· ' + D.run_id;
+$('#title').textContent = D.title;
+$('#subtitle').innerHTML = `TOF: ${esc(D.tof.input)}${D.tof.platform ? ' on ' + esc(D.tof.platform) : ''} · started ${esc(D.created_at)} · status <b>${esc(D.status)}</b>` + (D._draft ? '<span class="draft">DRAFT</span>' : '');
+
+// summary tiles
+const mval = label => M.find(m => m.label === label);
+const tile = (k, v, kd, small) => { if (v == null || v === '-' || v === '') kd = null;
+  return `<div class="tile"><div class="k">${esc(k)}</div><div class="v${small ? ' small' : ''}">${v ?? '<span class="empty">n/a</span>'}</div>${kd ? '<div style="margin-top:6px">' + kind(kd) + '</div>' : ''}</div>`; };
+const endNode = D.end && (D.end.node || D.end.candidate_node);
+$('#summary').innerHTML = [
+  tile('Funnel type', esc(S.funnel_type || 'not set'), null, true),
+  tile('Steps (taken path)', taken.length, 'observed'),
+  tile('Time to offer', esc((mval('Time to offer (TOF to buy page)') || {}).value || '-'), 'observed'),
+  tile('Branches explored', nodes.filter(n => n.path === 'branch').length, 'observed'),
+  tile('Branch coverage', esc((D.coverage || {}).coverage_pct ?? 0) + '%', 'observed'),
+  tile('End node', endNode ? esc(endNode) + ' · ' + esc(byId[endNode]?.type) : 'not confirmed', null, true),
+].join('');
+const list = arr => arr && arr.length ? '<ul>' + arr.map(x => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('') + '</ul>' : '<p class="empty">Not written yet. Add with fh.py summary.</p>';
+$('#tactics').innerHTML = list(S.key_tactics);
+$('#steal').innerHTML = S.steal ? Object.entries(S.steal).map(([biz, items]) => `<p style="margin:6px 0 2px"><b>${esc(biz)}</b></p>${list([].concat(items))}`).join('') : list(null);
+$('#gaps').innerHTML = list(S.gaps);
+const ladder = S.price_ladder || taken.filter(n => (n.prices_seen || []).length).map(n => ({node: n.id, price: n.prices_seen.filter(p => !/free/i.test(p)).slice(0, 3).join(' / ') || 'Free', name: n.type}));
+$('#ladder').innerHTML = ladder.length ? '<div class="ladder">' + ladder.map(r => `<div class="rung"><div class="p">${esc(r.price)}</div><div class="n">${esc(r.name || '')} ${r.node ? '(' + esc(r.node) + ')' : ''}</div></div>`).join('') + `</div><div style="margin-top:8px">${kind(S.price_ladder ? (S.price_ladder_kind || 'observed') : 'observed')}</div>` : '<p class="empty">No prices seen.</p>';
+
+// graph layout: rows by depth, taken path in column 0
+const W = 260, H = 118, GX = 70, GY = 74, PAD = 30;
+function layout(showBranches) {
+  const vis = nodes.filter(n => showBranches || n.path === 'taken');
+  const levels = {};
+  vis.forEach(n => (levels[n.depth || 0] ||= []).push(n));
+  const pos = {};
+  // order: taken first, then by parent's column, then capture time
+  const depths = Object.keys(levels).map(Number).sort((a, b) => a - b);
+  depths.forEach(d => {
+    levels[d].sort((a, b) => (a.path === 'taken' ? -1 : 0) - (b.path === 'taken' ? -1 : 0) || ((pos[a.parent]?.col ?? 0) - (pos[b.parent]?.col ?? 0)) || a.captured_at.localeCompare(b.captured_at));
+    levels[d].forEach((n, i) => pos[n.id] = {col: i, row: d});
+  });
+  const cols = Math.max(1, ...Object.values(pos).map(p => p.col + 1));
+  const rows = Math.max(1, ...Object.values(pos).map(p => p.row + 1));
+  Object.values(pos).forEach(p => { p.x = PAD + p.col * (W + GX); p.y = PAD + p.row * (H + GY); });
+  return {vis, pos, width: PAD * 2 + cols * W + (cols - 1) * GX, height: PAD * 2 + rows * H + (rows - 1) * GY};
+}
+const metricsFor = id => M.filter(m => m.node === id);
+function headline(n) {
+  const m = metricsFor(n.id);
+  const pick = m.find(x => /Views|Followers/.test(x.label)) || m.find(x => x.kind !== 'observed') || m.find(x => /Prices/.test(x.label)) || m.find(x => /CTAs/.test(x.label));
+  return pick;
+}
+function trunc(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+let selected = null;
+function draw() {
+  const showB = $('#t-branches').getAttribute('aria-pressed') === 'true';
+  const L = layout(showB);
+  const svg = $('#graph');
+  svg.setAttribute('width', L.width); svg.setAttribute('height', L.height);
+  svg.setAttribute('viewBox', `0 0 ${L.width} ${L.height}`);
+  let out = '';
+  D.edges.forEach(e => {
+    const a = L.pos[e.from], b = L.pos[e.to]; if (!a || !b) return;
+    const x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y, my = (y1 + y2) / 2;
+    out += `<path class="edge ${e.path === 'taken' ? 'taken' : ''}" d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}"><title>${esc(e.cta || e.trigger)} · ${esc(human(e.delay_s))}</title></path>`;
+    const lbl = trunc((e.cta ? '“' + e.cta + '”' : e.trigger) + ' · ' + human(e.delay_s), 40);
+    // label just above the child so fan-outs from one parent do not collide
+    const lx = x2, ly = y2 - 12;
+    out += `<rect class="elabel-bg" x="${lx - lbl.length * 2.9 - 4}" y="${ly - 9}" width="${lbl.length * 5.8 + 8}" height="16" rx="3"/><text class="elabel" x="${lx}" y="${ly + 3}" text-anchor="middle">${esc(lbl)}</text>`;
+  });
+  L.vis.forEach(n => {
+    const p = L.pos[n.id];
+    const strat = n.analysis && n.analysis.strategy;
+    const hl = headline(n);
+    let badges = '', bx = W - 10;
+    const addBadge = (txt, color) => { const w = txt.length * 6.2 + 10; bx -= w; badges += `<g class="badge"><rect x="${bx}" y="8" width="${w}" height="16" rx="3" fill="${color}"/><text x="${bx + 5}" y="19.5">${esc(txt)}</text></g>`; bx -= 4; };
+    if (n.is_end) addBadge('END', 'var(--end)');
+    (n.gates || []).forEach(g => addBadge('⚠ ' + g.kind.toUpperCase(), 'var(--gate)'));
+    out += `<g class="node ${n.path === 'taken' ? 'taken' : 'branch'} ${selected === n.id ? 'selected' : ''}" data-id="${n.id}" tabindex="0" role="button" aria-label="${esc(n.id + ' ' + n.type + ' ' + (n.title || ''))}" transform="translate(${p.x},${p.y})">
+      <rect class="card" width="${W}" height="${H}" rx="10"/>
+      <text class="t" x="12" y="20">${esc(trunc(n.id + ' · ' + n.type + ' · ' + n.platform, Math.floor((bx - 16) / 6.6)))}</text>${badges}
+      <text class="h" x="12" y="42">${esc(trunc(n.headline || n.title || n.final_url, 36))}</text>
+      <text class="s" x="12" y="60">${esc(trunc(n.final_url || (n.message && n.message.sender) || '', 34))}</text>
+      <text class="ov" x="12" y="80">${esc(trunc(strat || '', 42))}</text>
+      ${hl ? `<g class="numchip"><rect x="12" y="${H - 28}" width="${W - 24}" height="18" rx="4"/><text x="18" y="${H - 15}">${esc(trunc(hl.label + ': ' + hl.value, 33 - hl.kind.length))} [${esc(hl.kind)}]</text></g>` : ''}
+      <text class="s" x="${W - 12}" y="60" text-anchor="end">${n.since_prev_s == null ? '' : '+' + esc(human(n.since_prev_s))}</text>
+    </g>`;
+  });
+  svg.innerHTML = out;
+  svg.querySelectorAll('.node').forEach(g => {
+    g.addEventListener('click', () => select(g.dataset.id));
+    g.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); select(g.dataset.id); } });
+  });
+}
+function select(id) { selected = id; draw(); detail(byId[id]); }
+
+function detail(n) {
+  const a = n.analysis || {};
+  const im = n._img || {};
+  const shots = [im.screenshot && `<div class="shot"><img alt="Desktop screenshot of ${esc(n.id)}" src="${esc(im.screenshot)}"></div>`,
+                 im.screenshot_mobile && `<div class="shot"><img alt="Mobile screenshot of ${esc(n.id)}" src="${esc(im.screenshot_mobile)}"></div>`]
+                 .concat(Object.keys(im).filter(k => k.startsWith('extra_')).map(k => `<div class="shot"><img alt="Screenshot" src="${esc(im[k])}"></div>`)).filter(Boolean);
+  const ctas = (n.ctas || []).filter(c => c.kind !== 'nav').slice(0, 40);
+  const nm = metricsFor(n.id);
+  const sec = (h, body) => body ? `<section><h4>${h}</h4>${body}</section>` : '';
+  const ul = arr => arr && arr.length ? '<ul style="margin:0;padding-left:18px">' + arr.map(x => `<li>${esc(typeof x === 'string' ? x : JSON.stringify(x))}</li>`).join('') + '</ul>' : '';
+  $('#detail').innerHTML = `
+    <div class="hd"><div class="eyebrow">${esc(n.id)} · ${esc(n.type)} · ${n.path === 'taken' ? 'path taken' : 'explored branch'} · depth ${esc(n.depth)}</div>
+      <h3>${esc(n.title || n.headline || n.final_url)}</h3>
+      <div class="sub">${esc(n.platform)} · captured ${esc(n.captured_at)} ${n.since_prev_s == null ? '' : '· +' + esc(human(n.since_prev_s)) + ' after previous'} · ${esc(human(n.since_start_s))} from start</div>
+      ${(n.gates || []).map(g => `<div class="gate-pill">${esc(g.kind)} gate: ${esc(trunc(g.detail, 90))}. Agent stopped; the user decides.</div>`).join('')}</div>
+    ${sec('Strategy', a.strategy ? `<p style="margin:0">${esc(a.strategy)}</p>` + ul(a.tactics) : '')}
+    ${sec('Steal / adapt', ul([].concat(a.steal || [])))}
+    ${shots.length ? `<section><h4>Screenshots</h4><div class="${shots.length > 1 ? 'shots' : ''}">${shots.join('')}</div></section>` : ''}
+    ${sec('Hook', n.hook ? esc(n.hook) : '')}
+    ${sec('Headline', n.headline ? esc(n.headline) + (n.subheadlines && n.subheadlines.length ? ul(n.subheadlines.slice(0, 6)) : '') : '')}
+    ${sec('Offer', n.offers && n.offers.length ? ul(n.offers) : (n.prices_seen && n.prices_seen.length ? 'Prices seen: ' + esc(n.prices_seen.join(', ')) : ''))}
+    ${sec('Numbers', nm.length ? '<table>' + nm.map(m => `<tr><td>${esc(m.label)}</td><td><b>${esc(m.value)}</b></td><td>${kind(m.kind)}</td></tr>`).join('') + '</table>' : '')}
+    ${sec('CTAs', ctas.length ? '<table><tr><th>Text</th><th>Kind</th><th>Where</th></tr>' + ctas.map(c => `<tr><td>${esc(trunc(c.text, 60))}${c.target ? `<br><a href="${esc(c.target)}" target="_blank" rel="noopener noreferrer">${esc(trunc(c.target, 70))}</a>` : ''}</td><td>${esc(c.kind)}</td><td>${esc((c.placement || {}).region || '')}${(c.placement || {}).above_fold ? ' · above fold' : ''}${(c.placement || {}).in_modal ? ' · popup' : ''}</td></tr>`).join('') + '</table>' : '')}
+    ${sec('Urgency / scarcity', ul(n.urgency))}
+    ${sec('Proof', ul(n.proof))}
+    ${sec('Popups', ul((n.popups || []).map(p => (p.visible ? 'visible: ' : 'hidden: ') + trunc(p.text, 140) + (p.has_form ? ' [form]' : ''))))}
+    ${sec('Tracking', n.tracking ? `Pixels/tools: ${esc((n.tracking.pixels || []).join(', ') || 'none seen')}<br>Params: <code>${esc(JSON.stringify(n.tracking.params || {}))}</code>` : '')}
+    ${sec('Links', n.final_url ? `<a href="${esc(n.final_url)}" target="_blank" rel="noopener noreferrer">${esc(n.final_url)}</a>${(n.redirect_chain || []).length ? '<br>Redirects: ' + n.redirect_chain.map(esc).join(' → ') : ''}` : '')}
+    ${sec('Copy', n._copy ? `<pre>${esc(n._copy)}</pre>` : '')}
+    ${sec('Notes', n.notes ? esc(n.notes) : '')}`;
+}
+
+// metrics + timeline tables
+$('#metrics').innerHTML = M.length ? '<table><tr><th>Figure</th><th>Value</th><th>Kind</th><th>Stage</th><th>Source</th><th>Method</th></tr>' +
+  M.map(m => `<tr><td>${esc(m.label)}</td><td><b>${esc(m.value)}</b></td><td>${kind(m.kind)}</td><td>${esc(m.node || 'run')}</td><td>${esc(m.source || '')}</td><td>${esc(m.method || '')}</td></tr>`).join('') + '</table>' : '<p class="empty">No numbers.</p>';
+$('#timeline').innerHTML = '<table><tr><th>#</th><th>Time (UTC)</th><th>Elapsed</th><th>Event</th><th>Node</th><th>What happened</th></tr>' +
+  (D._events || []).map(e => `<tr><td>${e.seq}</td><td>${esc(e.ts)}</td><td>${esc(human(e.elapsed_s))}</td><td>${esc(e.kind)}</td><td>${esc(e.node || '')}</td><td>${esc(e.summary)}${e.logged_late ? ' <i>(logged late)</i>' : ''}</td></tr>`).join('') + '</table>';
+$('#foot').textContent = `Generated from funnel.json and events.jsonl. Captured from public pages only; no forms were submitted and nothing was bought.`;
+
+// toggles
+const tog = (id, fn) => $(id).addEventListener('click', ev => { const b = ev.currentTarget; b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true'); fn(b.getAttribute('aria-pressed') === 'true'); });
+tog('#t-overlay', on => $('#graph-wrap').classList.toggle('hide-overlay', !on));
+tog('#t-branches', () => draw());
+tog('#t-theme', on => document.documentElement.setAttribute('data-theme', on ? 'dark' : 'light'));
+draw();
+if (nodes.length) select((taken[0] || nodes[0]).id);
+</script>
+</body>
+</html>
